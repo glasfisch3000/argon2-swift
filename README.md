@@ -1,65 +1,134 @@
-## SwiftArgon2
+# SwiftArgon2
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Swift 6](https://img.shields.io/badge/Swift-6-orange.svg)](https://swift.org)
+[![Platforms](https://img.shields.io/badge/Platforms-macOS%20%7C%20iOS%20%7C%20Linux-blue.svg)](#platform-support)
 
-Pure Swift 6 (memory-safe, zero dependency, structured concurrency) implementation of [Argon2], the winner of the [Password Hash Competition].
-                 
-Includes a slimmed-down Swift 6 (memory-safe) implementation of Blake2b that only implements the operations needed for Argon2.
-                 
-Not as fast as the C reference implementation (about 2x-3x slower), but easy to use and performant enough for many use cases without requiring any unsafe memory operations.
-                 
-This library is primarily intended to be used as a PBKDF on mobile devices, and *not* as a server-side password hashing verifier.
-                 
-PLEASE NOTE: This has only been testing on Little-Endian systems and may not work on Big-Endian CPUs.
+A memory-safe, zero-dependency Swift 6 implementation of [Argon2](https://github.com/P-H-C/phc-winner-argon2), the winner of the [Password Hashing Competition](https://password-hashing.net) and the algorithm specified in [RFC 9106](https://www.rfc-editor.org/rfc/rfc9106.html).
 
-ALSO NOTE: We do make one compromise to memory-safety, which is to securely wipe data after computation with unsafe calls to memset_s().  If you want a purely memory-safe version that does not wipe the data, remove the MIMICLONE_SECURE_WIPE compiler flag when building
+Includes a slimmed-down memory-safe Swift implementation of Blake2b, containing only the operations needed for Argon2.
 
-## Installation (SPM)
+## Why This Library Exists
 
-SwiftArgon2 can be installed via SPM (Swift Package Manger) by adding the following to your depencencies:
+Most existing Swift Argon2 packages are thin wrappers around the C reference implementation or libsodium. While these are battle-tested and fast, they bring C's memory-safety failure modes into your Swift application — buffer overruns, use-after-free, and uninitialized reads at the FFI boundary.
+
+SwiftArgon2 is implemented in pure Swift, with one carefully-scoped exception (see [Secure Memory Wiping](#secure-memory-wiping) below). It exists for applications where the security properties of memory-safe code are worth a moderate performance cost — typically client-side key derivation on mobile devices, where the algorithm is meant to be slow anyway.
+
+## Features
+
+- **Pure Swift 6** with structured concurrency (`async/await`)
+- **Zero dependencies** beyond Foundation
+- **Memory safe** — no `UnsafeMutableBufferPointer`, no FFI except for secure memory wipe
+- **RFC 9106 compliant** — interoperable with the C reference implementation, libsodium, Password4j, Spring Security's Argon2PasswordEncoder, and any other spec-compliant verifier
+- **All three variants** — Argon2d, Argon2i, and Argon2id
+- **Constant-time hash comparison** for verification
+- **Secure memory wiping** of sensitive intermediate state (passwords, keys, memory matrix)
+- **PHC string format** — produces and consumes standard `$argon2id$v=19$m=...` strings without padding
+
+## Installation
+
+Add this to your `Package.swift` dependencies:
 
 ```swift
-.package(url: "https://github.com/mimiclone/argon2-swift.git", .branch("main"))
+.package(url: "https://github.com/mimiclone/argon2-swift.git", from: "1.0.0")
+```
+
+Then add `SwiftArgon2` to your target's dependencies:
+
+```swift
+.target(
+    name: "YourTarget",
+    dependencies: [
+        .product(name: "SwiftArgon2", package: "argon2-swift")
+    ]
+)
 ```
 
 ## Usage
 
-High-level hashing of a password
+### Hashing a password
 
 ```swift
 import SwiftArgon2
 
-// Create the instance
-let argon2 = Argon2(
-    params: .init(
-        parallelism: 4,     // Number of lanes (threads)
-        tagLength: 32,      // Output length (in bytes)
-        memorySize: 32,     // Memory size (in KiB)
-        iterations: 3,      // Number of passes
-        variant: .argon2d   // Variant: (.argon2d, .argon2i, .argon2id)
-    )
-)
-                 
-// Compute the hash
-let hashData = try? await argon2.compute(
-    password: "PasswordToHash".data(using: .utf8)!,
-    salt: "Use a cryptographically secure salt".data(using: .utf8)!
-    // Optional secret
-    // Optional associated data
+let argon2 = try Argon2(params: Argon2Params(
+    parallelism: 4,     // Number of lanes
+    tagLength: 32,      // Output length in bytes
+    memorySize: 65536,  // Memory size in KiB (64 MiB)
+    iterations: 3,      // Number of passes
+    variant: .argon2id  // .argon2d, .argon2i, or .argon2id
+))
+
+let hash = try await argon2.compute(
+    password: "MyPassword".data(using: .utf8)!,
+    salt: cryptographicallySecureRandomSalt   // 16+ bytes recommended
+    // Optional: secret (keyed hash), associatedData
 )
 ```
 
-## Features and bugs
+### Producing a PHC-formatted string
 
-Please file feature requests and bugs at the [issue tracker].
+```swift
+let encoded = try await argon2.computeEncoded(
+    password: passwordData,
+    salt: saltData
+)
+// "$argon2id$v=19$m=65536,t=3,p=4$<salt>$<hash>"
+```
 
-[issue tracker]: https://github.com/mimiclone/argon2-swift/issues
+The encoded string is interoperable with any RFC 9106-compliant verifier.
 
-## Licensing
+## Performance
 
-- SwiftArgon2 is Licensed under the [MIT License]
+This library is roughly 2-3x slower than the optimized C reference implementation. This is generally a non-issue for Argon2's typical use case ( client-side key derivation where slowness is the point). For high-throughput server-side password verification, a C-based implementation will be more efficient.
 
-[Argon2]: https://github.com/P-H-C/phc-winner-argon2
-                 
-[Password Hash Competition]: https://password-hashing.net
-                 
-[MIT License]: https://github.com/mimiclone/argon2-swift/blob/main/LICENSE
+This library is **primarily intended as a key derivation function on mobile devices**, not as a server-side password hashing verifier.
+
+## Secure Memory Wiping
+
+SwiftArgon2 securely wipes sensitive memory after use — passwords, secret keys, the H0 digest, the full memory matrix, and intermediate scratch buffers. By default, this uses `memset_s` (Apple platforms) or `explicit_bzero` (Linux) via Swift's FFI. Plain Swift assignment cannot reliably zero memory because the compiler may optimize away writes to memory that's about to be deallocated.
+
+This is the **only** non-pure-Swift code path in the library, and it is contained to a single function with a clearly documented purpose.
+
+To build without FFI-based secure wipe (strictly pure-Swift mode), remove the `MIMICLONE_SECURE_WIPE` define from your build. In this mode, the library falls back to plain Swift assignment of zeros, which the compiler may elide. **Memory wipes are not guaranteed in this mode.** Choose this configuration only if you understand and accept the tradeoff.
+
+You can verify the active mode at runtime via `Argon2Configuration.secureWipeMode`.
+
+## Platform Support
+
+Tested on little-endian systems (Apple Silicon, Intel, modern ARM). This covers all current Apple platforms and the vast majority of Linux deployments. Big-endian support is theoretically correct per the spec but not exercised in CI.
+
+| Platform | Status |
+|----------|--------|
+| macOS 13+ | Tested |
+| iOS 16+ | Tested |
+| Linux (Ubuntu) | Tested |
+| Big-endian platforms | Untested |
+
+## Test Vectors
+
+The test suite includes the canonical RFC 9106 test vectors plus additional vectors generated against the C reference implementation covering:
+
+- All three variants (Argon2d, Argon2i, Argon2id)
+- Empty and non-empty secret/associated-data combinations
+- Single-lane and multi-lane configurations
+- Single-pass and multi-pass configurations
+- Multiple tag lengths
+- Production-scale parameters
+
+If you discover an interoperability issue with another Argon2 implementation, please [open an issue](https://github.com/mimiclone/argon2-swift/issues) with the failing parameters.
+
+## Contributing
+
+Bug reports and pull requests welcome at the [issue tracker](https://github.com/mimiclone/argon2-swift/issues).
+
+## License
+
+SwiftArgon2 is licensed under the [MIT License](LICENSE).
+
+## Acknowledgments
+
+- The [Argon2 reference implementation](https://github.com/P-H-C/phc-winner-argon2) by the original authors
+- [RFC 9106](https://www.rfc-editor.org/rfc/rfc9106.html) for the canonical specification
+- The [Password Hashing Competition](https://password-hashing.net) for selecting Argon2
+- [swift-blake2](https://github.com/lovetodream/swift-blake2) for inspiration on performant Blake2b in Swift
