@@ -741,7 +741,8 @@ public struct Argon2 : Sendable {
     ///  - d: An Int specifying the fourth element of v to use in the round
     func round( _ v: inout [UInt64], _ a: Int, _ b: Int, _ c: Int, _ d: Int) {
         
-        assert(v.count == 16, "Reference array must be 16-element long")
+        assert(v.count >= 16, "Reference array must be at least 16-element long")
+        assert(v.count <= 128, "Reference array must be at most 128-element long")
         
         v[a] = (v[a] &+ v[b] &+ 2 &* trunc(v[a]) &* trunc(v[b]))
         v[d] = rotateRight((v[d] ^ v[a]), by: 32)
