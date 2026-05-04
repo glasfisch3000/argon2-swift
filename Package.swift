@@ -1,11 +1,14 @@
-// swift-tools-version: 6.1
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
     name: "SwiftArgon2",
     platforms: [
         .macOS(.v15),
-        .iOS(.v18)
+        .iOS(.v18),
+        .watchOS(.v11),
+        .tvOS(.v13),
+        .visionOS(.v2)
     ],
     products: [
         .library(

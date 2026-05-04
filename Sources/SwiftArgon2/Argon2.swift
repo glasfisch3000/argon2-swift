@@ -52,17 +52,17 @@ public struct Argon2Params : Sendable {
     let version: UInt32 = 0x13 // 19 encoded as hex
     
     public init(
-        parallelism: UInt32? = nil,
-        tagLength: UInt32? = nil,
-        memorySize: UInt32? = nil,
-        iterations: UInt32? = nil,
-        variant: Argon2Variant? = nil
+        parallelism:    UInt32?         = nil,
+        tagLength:      UInt32?         = nil,
+        memorySize:     UInt32?         = nil,
+        iterations:     UInt32?         = nil,
+        variant:        Argon2Variant?  = nil
     ) {
-        self.parallelism = parallelism ?? 4
-        self.tagLength = tagLength ?? 32
-        self.memorySize = memorySize ?? 65536
-        self.iterations = iterations ?? 3
-        self.variant = variant ?? .argon2id
+        self.parallelism    = parallelism   ?? 4
+        self.tagLength      = tagLength     ?? 32
+        self.memorySize     = memorySize    ?? 65536
+        self.iterations     = iterations    ?? 3
+        self.variant        = variant       ?? .argon2id
     }
     
 }
@@ -70,6 +70,8 @@ public struct Argon2Params : Sendable {
 public enum Argon2Error: Error {
     case invalidPasswordLength
     case invalidSaltLength
+    case invalidSecretLength
+    case invalidAssociatedDataLength
     case invalidParameters
     case blake2bFailed
 }
@@ -80,14 +82,24 @@ public struct Argon2 : Sendable {
     // MARK: - Constants
     
     // Password constants
-    private static let minimumPasswordBytes: Int = 0
-    private static let maximumPasswordBytes: Int = 4294967295 // UInt32.max = 2^32-1
+    private static let minimumPasswordBytes: UInt32 = .min // 0
+    private static let maximumPasswordBytes: UInt32 = .max // UInt32.max = 2^32-1 = 4294967295
     private static let passwordInputRange = Argon2.minimumPasswordBytes...Argon2.maximumPasswordBytes
     
     // Salt constants
-    private static let minimumSaltBytes: Int = 8
-    private static let maximumSaltBytes: Int = 4294967295 // UInt32.max = 2^32-1
+    private static let minimumSaltBytes: UInt32 = 8
+    private static let maximumSaltBytes: UInt32 = .max // UInt32.max = 2^32-1 = 4294967295
     private static let saltInputRange = Argon2.minimumSaltBytes...Argon2.maximumSaltBytes
+    
+    // Secret constants
+    private static let minimumSecretBytes: UInt32 = .min    // 0
+    private static let maximumSecretBytes: UInt32 = .max    // UInt32.max = 2^32-1 = 4294967295
+    private static let secretInputRange = Argon2.minimumSecretBytes...Argon2.maximumSecretBytes
+    
+    // Associated Data constants
+    private static let minimumAssociatedDataBytes: UInt32 = .min    // 0
+    private static let maximumAssociatedDataBytes: UInt32 = .max    // UInt32.max = 2^32-1 = 4294967295
+    private static let associatedDataInputRange = Argon2.minimumAssociatedDataBytes...Argon2.maximumAssociatedDataBytes
     
     // Parallelism constants
     private static let minParallelism: UInt32 = 1
@@ -100,11 +112,11 @@ public struct Argon2 : Sendable {
     private static let tagLengthInputRange = Argon2.minTagBytes...Argon2.maxTagBytes
     
     // Memory Size constants
-    private static let maxMemoryKibibytes: UInt32 = 4294967295 // UInt32.max = 2^32-1
+    private static let maxMemoryKibibytes: UInt32 = .max // UInt32.max = 2^32-1 = 4294967295
     
     // Time Cost (Iterations) constants
     private static let minIterations: UInt32 = 1
-    private static let maxIterations: UInt32 = 4294967295 // 2^32-1
+    private static let maxIterations: UInt32 = .max // UInt32.max = 2^32-1 = 4294967295
     private static let iterationsRange = Argon2.minIterations...Argon2.maxIterations
     
     // MARK: - Internal Types
@@ -213,7 +225,13 @@ public struct Argon2 : Sendable {
     // MARK: - Initialization
     
     /// Initialize the Argon2 instance
-    public init(params: Argon2Params) throws {
+    public init(params: Argon2Params? = nil) throws {
+        
+        // GUARD: Default param block
+        guard let params else {
+            self.params = .init()
+            return
+        }
         
         // GUARD: Parallelism (p -> number of lanes)
         guard Argon2.parallelismRange.contains(params.parallelism) else {
@@ -349,13 +367,27 @@ public struct Argon2 : Sendable {
     private func createContext(password: Data, salt: Data, secret: Data?, associatedData: Data?) throws -> Context {
         
         // GUARD: Password (P) length
-        guard Argon2.passwordInputRange.contains(password.count) else {
+        guard Argon2.passwordInputRange.contains(UInt32(password.count)) else {
             throw Argon2Error.invalidPasswordLength
         }
         
         // GUARD: Salt (S) Length
-        guard Argon2.saltInputRange.contains(salt.count) else {
+        guard Argon2.saltInputRange.contains(UInt32(salt.count)) else {
             throw Argon2Error.invalidSaltLength
+        }
+        
+        // (Optional) GUARD: Secret (K) Length
+        if let secret {
+            guard Argon2.secretInputRange.contains(UInt32(secret.count)) else {
+                throw Argon2Error.invalidSecretLength
+            }
+        }
+        
+        // GUARD: Associated Data (X) Length
+        if let associatedData {
+            guard Argon2.associatedDataInputRange.contains(UInt32(associatedData.count)) else {
+                throw Argon2Error.invalidAssociatedDataLength
+            }
         }
         
         return Context(params, password, salt, secret, associatedData)

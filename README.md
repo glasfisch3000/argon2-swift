@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Swift 6](https://img.shields.io/badge/Swift-6-orange.svg)](https://swift.org)
-[![Platforms](https://img.shields.io/badge/Platforms-macOS%20%7C%20iOS%20%7C%20Linux-blue.svg)](#platform-support)
+[![Platforms](https://img.shields.io/badge/Platforms-iOS%20%7C%20macOS%20%7C%20visionOS%20%7C%20watchOS%20%7C%20tvOS%20%7C%20Linux%20%7C%20Android-blue.svg)](#platform-support)
 
 A memory-safe, zero-dependency Swift 6 implementation of [Argon2](https://github.com/P-H-C/phc-winner-argon2), the winner of the [Password Hashing Competition](https://password-hashing.net) and the algorithm specified in [RFC 9106](https://www.rfc-editor.org/rfc/rfc9106.html).
 
@@ -21,7 +21,6 @@ SwiftArgon2 is implemented in pure Swift, with one carefully-scoped exception (s
 - **Memory safe** — no `UnsafeMutableBufferPointer`, no FFI except for secure memory wipe
 - **RFC 9106 compliant** — interoperable with the C reference implementation, libsodium, Password4j, Spring Security's Argon2PasswordEncoder, and any other spec-compliant verifier
 - **All three variants** — Argon2d, Argon2i, and Argon2id
-- **Constant-time hash comparison** for verification
 - **Secure memory wiping** of sensitive intermediate state (passwords, keys, memory matrix)
 - **PHC string format** — produces and consumes standard `$argon2id$v=19$m=...` strings without padding
 
@@ -30,7 +29,7 @@ SwiftArgon2 is implemented in pure Swift, with one carefully-scoped exception (s
 Add this to your `Package.swift` dependencies:
 
 ```swift
-.package(url: "https://github.com/mimiclone/argon2-swift.git", from: "1.0.1")
+.package(url: "https://github.com/mimiclone/argon2-swift.git", from: "1.0.2")
 ```
 
 Then add `SwiftArgon2` to your target's dependencies:
@@ -51,6 +50,7 @@ Then add `SwiftArgon2` to your target's dependencies:
 ```swift
 import SwiftArgon2
 
+// Argon2Params are optional and you will get these defaults if you omit them
 let argon2 = try Argon2(params: Argon2Params(
     parallelism: 4,     // Number of lanes
     tagLength: 32,      // Output length in bytes
@@ -80,17 +80,36 @@ The encoded string is interoperable with any RFC 9106-compliant verifier.
 
 ## Performance
 
-This library is roughly 2-3x slower than the optimized C reference implementation. This is generally a non-issue for Argon2's typical use case ( client-side key derivation where slowness is the point). For high-throughput server-side password verification, a C-based implementation will be more efficient.
+This library is roughly 2-3x slower than the optimized C reference implementation when built with release optimizations.
+This is generally a non-issue for Argon2's typical use case (client-side password hashing and key derivation where slowness is the point).
+For high-throughput server-side password verification, a C-based implementation will be more efficient.
 
 This library is **primarily intended as a key derivation function on mobile devices**, not as a server-side password hashing verifier.
 
+### Use in Xcode apps
+
+Argon2 is intentionally compute-intensive.
+In Debug builds, Swift disables optimizations entirely (-Onone), which can make hashing take 20-100x longer than in Release builds.
+A hash that completes in 200ms in Release may take 10+ seconds in Debug.
+
+For development, consider:
+
+- Reducing Argon2 parameters (memory cost, iterations) during Debug runs and using production parameters only in Release builds.
+- Testing authentication flows against Release builds.
+- As a last resort, adding -O to "Other Swift Flags" for your Debug configuration to force optimization across your entire app.
+
 ## Secure Memory Wiping
 
-SwiftArgon2 securely wipes sensitive memory after use — passwords, secret keys, the H0 digest, the full memory matrix, and intermediate scratch buffers. By default, this uses `memset_s` (Apple platforms) or `explicit_bzero` (Linux) via Swift's FFI. Plain Swift assignment cannot reliably zero memory because the compiler may optimize away writes to memory that's about to be deallocated.
+SwiftArgon2 securely wipes sensitive memory after use (passwords, secret keys, the H0 digest, the full memory matrix, and intermediate scratch buffers).
+By default, this uses `memset_s` (Apple platforms) or `explicit_bzero` (Linux) via Swift's FFI.
+Plain Swift assignment cannot reliably zero memory because the compiler may optimize away writes to memory that's about to be deallocated.
 
 This is the **only** non-pure-Swift code path in the library, and it is contained to a single function with a clearly documented purpose.
 
-To build without FFI-based secure wipe (strictly pure-Swift mode), remove the `MIMICLONE_SECURE_WIPE` define from your build. In this mode, the library falls back to plain Swift assignment of zeros, which the compiler may elide. **Memory wipes are not guaranteed in this mode.** Choose this configuration only if you understand and accept the tradeoff.
+To build without FFI-based secure wipe (strictly pure-Swift mode), remove the `MIMICLONE_SECURE_WIPE` define from your build.
+In this mode, the library falls back to plain Swift assignment of zeros, which the compiler may elide. 
+**Memory wipes are not guaranteed in this mode.**
+Choose this configuration only if you understand and accept the tradeoff.
 
 You can verify the active mode at runtime via `Argon2Configuration.secureWipeMode`.
 
@@ -100,10 +119,14 @@ Tested on little-endian systems (Apple Silicon, Intel, modern ARM). This covers 
 
 | Platform | Status |
 |----------|--------|
-| macOS 13+ | Tested |
-| iOS 16+ | Tested |
-| Linux (Ubuntu) | Tested |
-| Big-endian platforms | Untested |
+| macOS 15+ | Tested |
+| iOS 18+ | Tested |
+| watchOS 11+ | Tested |
+| tvOS 13+ | Tested |
+| visionOS 2+ | Tested |
+| Linux (Debian) | Tested |
+| Linux (Other flavors) | Not Tested |
+| Windows | Not Tested |
 
 ## Test Vectors
 
