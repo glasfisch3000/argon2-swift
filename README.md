@@ -29,7 +29,7 @@ SwiftArgon2 is implemented in pure Swift, with one carefully-scoped exception (s
 Add this to your `Package.swift` dependencies:
 
 ```swift
-.package(url: "https://github.com/mimiclone/argon2-swift.git", from: "1.0.2")
+.package(url: "https://github.com/mimiclone/argon2-swift.git", from: "1.0.3")
 ```
 
 Then add `SwiftArgon2` to your target's dependencies:
