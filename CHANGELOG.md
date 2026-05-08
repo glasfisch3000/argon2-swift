@@ -13,3 +13,8 @@
 - Added support for watchOS by replacing some uses of Int with UInt32 or UInt64 (some watchOS versions specify 32-bit integers)
 - Added explicit watchOs, tvOS and visionOS tags in the package manifest
 - Removed README line describing hash verification (which was removed prior to initial publication, but came back in a merge)
+
+## v1.0.3
+- Refactored load64() utility function to ensure Swift 6.0 and 6.1 builds would not time out on type checking
+- Bumped required version of tvOS from v13 to v18 to ensure availability of Mutex
+- Updated README with tvOS version requirement change

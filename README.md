@@ -122,7 +122,7 @@ Tested on little-endian systems (Apple Silicon, Intel, modern ARM). This covers 
 | macOS 15+ | Tested |
 | iOS 18+ | Tested |
 | watchOS 11+ | Tested |
-| tvOS 13+ | Tested |
+| tvOS 18+ | Tested |
 | visionOS 2+ | Tested |
 | Linux (Debian) | Tested |
 | Linux (Other flavors) | Not Tested |

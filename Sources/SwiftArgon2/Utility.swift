@@ -47,7 +47,13 @@ func trunc(_ v: UInt64) -> UInt64 {
 
 @inlinable
 func load64(_ src: [UInt8], i: Int) -> UInt64 {
-    let p = src[i..<(i + 8)]
-    return (UInt64(p[i + 0]) << 0) | (UInt64(p[i + 1]) <<  8) | (UInt64(p[i + 2]) << 16) | (UInt64(p[i + 3]) << 24) |
-    (UInt64(p[i + 4]) << 32) | (UInt64(p[i + 5]) << 40) | (UInt64(p[i + 6]) << 48) | (UInt64(p[i + 7]) << 56)
+    let b0 = UInt64(src[i + 0])
+    let b1 = UInt64(src[i + 1])
+    let b2 = UInt64(src[i + 2])
+    let b3 = UInt64(src[i + 3])
+    let b4 = UInt64(src[i + 4])
+    let b5 = UInt64(src[i + 5])
+    let b6 = UInt64(src[i + 6])
+    let b7 = UInt64(src[i + 7])
+    return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24) | (b4 << 32) | (b5 << 40) | (b6 << 48) | (b7 << 56)
 }
