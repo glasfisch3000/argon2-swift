@@ -1,5 +1,4 @@
 import struct Foundation.Data
-import struct Synchronization.Mutex
 
 /// The variant of Argon2 to use
 public enum Argon2Variant: Sendable {
@@ -317,10 +316,7 @@ public struct Argon2 : Sendable {
             // Compute slice-wise
             for sliceIndex in 0...3 {
                 
-                // Write-only mutex
-                let lock = Mutex<Void>(())
-                
-                await withTaskGroup(of: SegmentResult.self) { group in
+                let results = await withTaskGroup(of: SegmentResult.self) { group in
                     
                     // Compute each lane
                     for lane: Int in 0..<context.numLanes {
@@ -335,22 +331,23 @@ public struct Argon2 : Sendable {
                             
                         }
                         
-                        // Update memory with segment results
-                        for await segmentResult in group {
-                            // Update the memory
-                            lock.withLock { _ in
-                                context.memory.replaceSubrange(
-                                    segmentResult.startIndex..<(segmentResult.startIndex + segmentResult.segmentBlocks.count),
-                                    with: segmentResult.segmentBlocks
-                                )
-                            }
-                        }
-                        
                     }
                     
-                    // Wait for all segments in the lane to complete
-                    await group.waitForAll()
+                    // Update memory with segment results
+                    var collected: [SegmentResult] = []
+                    for await result in group {
+                        collected.append(result)
+                    }
+                    return collected
                     
+                }
+                
+                for result in results {
+                    // Update the memory
+                    context.memory.replaceSubrange(
+                        result.startIndex..<(result.startIndex + result.segmentBlocks.count),
+                        with: result.segmentBlocks
+                    )
                 }
                 
             }

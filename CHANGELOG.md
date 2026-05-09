@@ -18,3 +18,7 @@
 - Refactored load64() utility function to ensure Swift 6.0 and 6.1 builds would not time out on type checking
 - Bumped required version of tvOS from v13 to v18 to ensure availability of Mutex
 - Updated README with tvOS version requirement change
+
+## v1.0.4
+- Removed usage of Mutex to avoid Swift 6.0 compiler bug
+- Update README with current version
