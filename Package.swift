@@ -14,7 +14,7 @@ let package = Package(
         .library(
             name: "SwiftArgon2",
             targets: ["SwiftArgon2"]
-        ),
+        )
     ],
     targets: [
         .target(
@@ -26,6 +26,6 @@ let package = Package(
         .testTarget(
             name: "SwiftArgon2Tests",
             dependencies: ["SwiftArgon2"]
-        ),
+        )
     ]
 )

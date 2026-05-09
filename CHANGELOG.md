@@ -21,4 +21,6 @@
 
 ## v1.0.4
 - Removed usage of Mutex to avoid Swift 6.0 compiler bug
+- Improved parallelism structure which boosted performance ~3x
+- Added benchmark comparison table with libsodium and Reference C implementation
 - Update README with current version

@@ -561,6 +561,11 @@ public struct Argon2 : Sendable {
                 
             } else {
                 
+                // On the first iteration after entering a new pass at slice 0,
+                // prev_offset was set to wrap to the lane's last block. After
+                // processing block 0 of this segment, swap prev_offset back to
+                // "one behind current" for the rest of the segment.
+                
                 // Retrieve the pseudo random number from the previous block
                 if let prevBlockSegmentIndex = segmentBlockMap[prevBlockIndex] {
                     pseudoRand = result[prevBlockSegmentIndex].v[0]
@@ -585,7 +590,7 @@ public struct Argon2 : Sendable {
             
             // Retrieve the reference block
             let refBlockIndex = context.laneLength * refLane + refIndex
-            var refBlock: Block
+            let refBlock: Block
             if let refBlockSegmentIndex = segmentBlockMap[refBlockIndex] {
                 refBlock = result[refBlockSegmentIndex]
             } else {
@@ -811,7 +816,7 @@ public struct Argon2 : Sendable {
         round(&v, base+3, base+4, base+9,  base+14)
     }
     
-    func compress(_ prevBlock: Block, _ refBlock: Block, _ currBlock: Block? = nil) -> Block {
+    func compress(_ prevBlock: borrowing Block, _ refBlock: borrowing Block, _ currBlock: Block? = nil) -> Block {
         
         assert(prevBlock.v.count == 128, "Incorrect (prev) data block size \(prevBlock.v.count) passed to compression function, expected 128")
         assert(refBlock.v.count == 128, "Incorrect (ref) data block size \(refBlock.v.count) passed to compression function, expected 128")

@@ -80,11 +80,25 @@ The encoded string is interoperable with any RFC 9106-compliant verifier.
 
 ## Performance
 
-This library is roughly 2-3x slower than the optimized C reference implementation when built with release optimizations.
-This is generally a non-issue for Argon2's typical use case (client-side password hashing and key derivation where slowness is the point).
-For high-throughput server-side password verification, a C-based implementation will be more efficient.
+This library is roughly 3-5x slower than libsodium with p=1 (which uses hand-crafted NEON instructions for Blake2b).
+Notably though, this library is *more performant* than the reference C implementation when run on an ARM64 processor.
+This is because the reference implementation does not have hand-written SIMD intrinsics for NEON, and so falls back to
+portable scalar C.
+
+The table below shows benchmarks from a MacBook Pro with an Apple M2 Max chipset:
+
+| Implementation              | Time   | Notes                                |
+|-----------------------------|--------|--------------------------------------|
+| SwiftArgon2, p=4            | 0.165s | Parallel                             |
+| libsodium, p=1              | 0.081s | Hand-tuned NEON; p=4 not exposed     |
+| SwiftArgon2, p=1            | 0.463s | Autovectorized                       |
+| Reference C, p=4 (no SIMD)  | ~0.84s | Portable scalar on arm64             |
+| Reference C, p=1 (no SIMD)  | ~0.65s | Portable scalar on arm64             |
 
 This library is **primarily intended as a key derivation function on mobile devices**, not as a server-side password hashing verifier.
+
+For high-throughput server-side password verification (on x86), a C-based implementation will be more efficient.
+
 
 ### Use in Xcode apps
 
