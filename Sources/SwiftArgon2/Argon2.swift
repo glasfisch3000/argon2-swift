@@ -1,7 +1,7 @@
 import struct Foundation.Data
 
 /// The variant of Argon2 to use
-public enum Argon2Variant: Sendable {
+public enum Argon2Variant: String, Sendable {
     
     /**
      * Data-dependent addressing.  Faster but more vulnerable to side-channel attacks
@@ -26,17 +26,6 @@ public enum Argon2Variant: Sendable {
         case .argon2d: return 0
         case .argon2i: return 1
         case .argon2id: return 2
-        }
-    }
-    
-    /**
-     * Name used for encoded hash output
-     */
-    var name: String {
-        switch self {
-        case .argon2d: return "argon2d"
-        case .argon2i: return "argon2i"
-        case .argon2id: return "argon2id"
         }
     }
 }
@@ -270,7 +259,7 @@ public struct Argon2 : Sendable {
         // Perform the hash
         let hashData = try await compute(password: password, salt: salt, secret: secret, associatedData: associatedData)
         
-        var encodedHash = "$\(params.variant.name)"
+        var encodedHash = "$\(params.variant.rawValue)"
         encodedHash.append("$v=\(params.version)")
         encodedHash.append("$m=\(params.memorySize)")
         encodedHash.append(",t=\(params.iterations)")
@@ -283,6 +272,37 @@ public struct Argon2 : Sendable {
         return encodedHash
         
     }
+	
+	public static func verify(
+		password: Data,
+		encoded: String,
+		secret: Data? = nil,
+		associatedData: Data? = nil
+	) async throws -> Bool? {
+		let regex = /\$(?<variant>argon2i|argon2d|argon2id)\$v=(?<version>[0-9]+)\$m=(?<memorySize>[0-9]+),t=(?<iterations>[0-9]+),p=(?<parallelism>[0-9]+)\$(?<salt>[a-zA-Z0-9+\/]+)\$(?<hash>[a-zA-Z0-9+\/]+)/
+		
+		guard let match = try regex.wholeMatch(in: encoded) else {
+			return nil
+		}
+		
+		guard let variant = Argon2Variant(rawValue: String(match.output.variant)),
+			  let version = UInt32(match.output.version),
+			  let memorySize = UInt32(match.output.memorySize),
+			  let iterations = UInt32(match.output.iterations),
+			  let parallelism = UInt32(match.output.parallelism),
+			  let salt = Data(argon2B64: String(match.output.salt)),
+			  let hash = Data(argon2B64: String(match.output.hash)) else {
+			return nil
+		}
+		
+		let hasher = try Argon2(params: .init(parallelism: parallelism, tagLength: UInt32(hash.count), memorySize: memorySize, iterations: iterations, variant: variant))
+		guard hasher.params.version == version else {
+			return nil
+		}
+		
+		let computedHash = try await hasher.compute(password: password, salt: salt, secret: secret, associatedData: associatedData)
+		return computedHash.elementsEqual(hash)
+	}
     
     /// Run Argon2 algorithm
     /// - Parameters:
@@ -915,11 +935,11 @@ extension UInt64 {
 }
 
 extension Data {
-    func argon2B64String() -> String {
+    public func argon2B64String() -> String {
         base64EncodedString().trimmingCharacters(in: ["="])
     }
     
-    init?(argon2B64 s: String) {
+    public init?(argon2B64 s: String) {
         let stripped = s.trimmingCharacters(in: ["="])
         let pad = (4 - stripped.count % 4) % 4
         self.init(base64Encoded: stripped + String(repeating: "=", count: pad))
